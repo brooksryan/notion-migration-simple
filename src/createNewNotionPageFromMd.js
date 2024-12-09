@@ -9,7 +9,7 @@ function createNotionPageFromMd(markdownFilePath) {
     const createPage = require('./notion/createNewPage');
 
     const markdownContent = fs.readFileSync(markdownFilePath, 'utf-8');
-    const filename = markdownFilePath.split('/').pop();
+    const filename = markdownFilePath.split('/').pop().replace(/\.[^/.]+$/, '');
 
     const { frontmatter, body } = parseFrontmatter(markdownContent, filename);
 
@@ -17,10 +17,16 @@ function createNotionPageFromMd(markdownFilePath) {
 
     const notionBlocks = convertToNotionBlocksWithMartian(modifiedBody);
 
-    createPage({ title: frontmatter.title, tags: frontmatter.tags, notionBlocks });
+    createPage({ 
+        title: frontmatter.title, 
+        tags: frontmatter.tags, 
+        notionBlocks, 
+        wikiLinks
+    });
 }
 
 
+
 // Example usage:
-createNotionPageFromMd('./src/obsidian/markdown-files/coding-notes.md');
+createNotionPageFromMd('./src/obsidian/markdown-files/Coding Notes.md');
 

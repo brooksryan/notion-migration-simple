@@ -12,6 +12,8 @@ const path = require('path');
  * @param {string} filename - The name of the file being read.
  */
 function parseFrontmatter(content, filename) {
+    //TODO: update to retreive all properties in the frontmatter
+    
     const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
     console.log(JSON.stringify(content))
     if (!match) {
