@@ -1,6 +1,7 @@
 // src/createPage.js
 require('dotenv').config();
 const notion = require('./notionClient');
+const { Client } = require('@notionhq/client');
 
 /**
  * Creates a new Notion page in the specified database.
@@ -16,12 +17,36 @@ async function createPage({ title, tags = [], notionBlocks = [], wikiLinks = [],
     throw new Error('No database ID provided or found in environment variables.');
   }
 
+  const notion = new Client({ auth: process.env.NOTION_API_KEY });
+
+  // Format blocks correctly according to Notion's API
+  const formattedBlocks = notionBlocks.map(block => {
+    // Ensure the block has the required structure
+    const formattedBlock = {
+      object: 'block',
+      type: block.type
+    };
+
+    // Add the content under the correct type key
+    formattedBlock[block.type] = {
+      rich_text: [{
+        type: 'text',
+        text: {
+          content: block.content.text?.[0]?.text?.content || ''
+        }
+      }]
+    };
+
+    return formattedBlock;
+  });
+
   const response = await notion.pages.create({
     parent: { database_id: databaseId },
     properties: {
       "Page": {
         "title": [
           {
+            "type": "text",
             "text": {
               "content": title
             }
@@ -44,7 +69,7 @@ async function createPage({ title, tags = [], notionBlocks = [], wikiLinks = [],
         }]
       }
     },
-    children: notionBlocks
+    children: formattedBlocks,
   });
 
   return response;
