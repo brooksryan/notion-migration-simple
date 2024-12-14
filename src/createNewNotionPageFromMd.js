@@ -10,6 +10,7 @@ require('dotenv').config();
 async function createNotionPageFromMd(markdownFilePath, databaseType = 'default') {
     // Import required modules
     const fs = require('fs');
+    const path = require('path');
     const parseFrontmatter = require('./obsidian/parseFrontmatter');
     const parseMarkdownBody = require('./obsidian/wikiLinkIdentifier');
     const { convertToNotionBlocksWithMartian } = require('./obsidian/markdownToNotionBlocks');
@@ -18,10 +19,7 @@ async function createNotionPageFromMd(markdownFilePath, databaseType = 'default'
     try {
         // Read and parse the markdown file
         const markdownContent = fs.readFileSync(markdownFilePath, 'utf-8');
-        const filename = markdownFilePath
-            .split('/')
-            .pop()
-            .replace(/\.[^/.]+$/, '');
+        const filename = path.basename(markdownFilePath, path.extname(markdownFilePath));
 
         // Extract frontmatter and body
         const { frontmatter, body } = parseFrontmatter(markdownContent, filename);
