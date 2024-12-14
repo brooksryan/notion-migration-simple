@@ -1,19 +1,23 @@
 // src/createPage.js
 require('dotenv').config();
 const notion = require('./notionClient');
+const { getDatabaseId } = require('./config');
 
 /**
  * Creates a new Notion page in the specified database.
- * @param {string} title - The title of the new Notion page
- * @param {string[]} tags - An array of tags for the multi_select property
- * @param {Array} notionBlocks - An array of Notion blocks
- * @param {string[]} wikiLinks - An array of wiki links
- * @param {string} [databaseId=process.env.IMPORTANT_NOTES_DB] - (optional) Database ID if not using default
+ * @param {Object} params - The parameters for creating the page
+ * @param {string} params.title - The title of the new Notion page
+ * @param {string[]} params.tags - An array of tags for the multi_select property
+ * @param {Array} params.notionBlocks - An array of Notion blocks
+ * @param {string[]} params.wikiLinks - An array of wiki links
+ * @param {string} params.databaseType - The type of database to use (e.g., 'important', 'daily', 'project', 'coding')
  * @returns {Promise<Object>} - The Notion API response
  */
-async function createPage({ title, tags = [], notionBlocks = [], wikiLinks = [], databaseId = process.env.NOTION_IMPORTANT_NOTES_DB }) {
+async function createPage({ title, tags = [], notionBlocks = [], wikiLinks = [], databaseType = 'default' }) {
+  const databaseId = getDatabaseId(databaseType);
+
   if (!databaseId) {
-    throw new Error('No database ID provided or found in environment variables.');
+    throw new Error(`No database ID found for type: ${databaseType}. Please check your .env file.`);
   }
 
   const response = await notion.pages.create({
