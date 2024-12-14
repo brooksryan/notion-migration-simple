@@ -2,56 +2,56 @@
 require('dotenv').config();
 const notion = require('./notionClient');
 const { getDatabaseId } = require('./config');
+const { ensureProperties, formatPropertyValue } = require('./propertyHandler');
 
 /**
  * Creates a new Notion page in the specified database.
  * @param {Object} params - The parameters for creating the page
- * @param {string} params.title - The title of the new Notion page
- * @param {string[]} params.tags - An array of tags for the multi_select property
+ * @param {Object} params.properties - All properties from frontmatter
  * @param {Array} params.notionBlocks - An array of Notion blocks
  * @param {string[]} params.wikiLinks - An array of wiki links
- * @param {string} params.databaseType - The type of database to use (e.g., 'important', 'daily', 'project', 'coding')
+ * @param {string} params.databaseType - The type of database to use
  * @returns {Promise<Object>} - The Notion API response
  */
-async function createPage({ title, tags = [], notionBlocks = [], wikiLinks = [], databaseType = 'default' }) {
-  const databaseId = getDatabaseId(databaseType);
+async function createPage({ properties, notionBlocks = [], wikiLinks = [], databaseType = 'default' }) {
+    const databaseId = getDatabaseId(databaseType);
 
-  if (!databaseId) {
-    throw new Error(`No database ID found for type: ${databaseType}. Please check your .env file.`);
-  }
+    if (!databaseId) {
+        throw new Error(`No database ID found for type: ${databaseType}. Please check your .env file.`);
+    }
 
-  const response = await notion.pages.create({
-    parent: { database_id: databaseId },
-    properties: {
-      "Page": {
-        "title": [
-          {
-            "text": {
-              "content": title
+    try {
+        // Ensure all properties exist in the database and get their mappings
+        const propertyMappings = await ensureProperties(databaseId, properties);
+
+        // Format all properties for Notion
+        const notionProperties = {};
+        
+        // Handle all frontmatter properties
+        for (const [key, value] of Object.entries(properties)) {
+            const mapping = propertyMappings[key];
+            if (mapping) {
+                notionProperties[mapping.name] = formatPropertyValue(value, mapping.type);
             }
-          }
-        ]
-      },
-      "Tags": {
-        "type": "multi_select",
-        "multi_select": tags.map(tag => ({
-          "name": tag.trim()
-        }))
-      },
-      "Related Links": {
-        "type": "rich_text",
-        "rich_text": [{
-          "type": "text",
-          "text": {
-            "content": wikiLinks.join(', ')
-          }
-        }]
-      }
-    },
-    children: notionBlocks
-  });
+        }
 
-  return response;
+        // Handle Related Links specially
+        notionProperties['Related Links'] = formatPropertyValue(
+            wikiLinks.join(', '), 
+            'rich_text'
+        );
+
+        // Create the page
+        const response = await notion.pages.create({
+            parent: { database_id: databaseId },
+            properties: notionProperties,
+            children: notionBlocks
+        });
+
+        return response;
+    } catch (error) {
+        throw new Error(`Failed to create Notion page: ${error.message}`);
+    }
 }
 
 module.exports = createPage;

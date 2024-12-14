@@ -10,6 +10,8 @@ A Node.js tool to migrate Markdown notes from Obsidian to Notion, preserving fro
 - 🏷️ Supports tags via frontmatter with hierarchical structure
 - 📝 Maintains markdown formatting using Martian markdown converter
 - 🚀 Batch processing support for multiple files
+- 🔄 Automatic property type detection and creation in Notion databases
+- ⚙️ Configurable property mappings via JSON configuration
 
 ## Prerequisites
 
@@ -36,8 +38,60 @@ npm install
 3. Configure environment variables:
 ```env
 NOTION_API_KEY=your_notion_integration_token
-NOTION_IMPORTANT_NOTES_DB=your_notion_database_id
+NOTION_DATABASE_ID=your_notion_database_id
 ```
+
+## Configuration
+
+The tool uses a configuration file (`src/notion/notion-config.json`) to manage:
+
+1. Database Mappings:
+```json
+{
+  "databases": {
+    "default": "NOTION_DATABASE_ID",
+    "important": "NOTION_IMPORTANT_NOTES_DB"
+  }
+}
+```
+
+2. Property Type Mappings:
+```json
+{
+  "propertyTypes": {
+    "date": "date",
+    "tags": "multi_select",
+    "meeting_topics": "multi_select"
+  }
+}
+```
+
+3. Special Properties:
+```json
+{
+  "specialProperties": {
+    "Related Links": {
+      "type": "rich_text",
+      "required": true
+    }
+  }
+}
+```
+
+## Property Handling
+
+The tool automatically:
+- Creates missing properties in your Notion database
+- Detects appropriate property types based on content
+- Converts frontmatter properties to Notion properties
+- Maintains special properties like "Page" (title) and "Related Links"
+
+Default property types:
+- `date` → Date type
+- `tags` → Multi-select
+- `meeting_topics` → Multi-select
+- `attendees` → Multi-select
+- Others → Rich text
 
 ## Usage
 

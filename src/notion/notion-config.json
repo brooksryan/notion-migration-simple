@@ -1,0 +1,23 @@
+{
+  "databases": {
+    "default": "NOTION_DATABASE_ID",
+    "important": "NOTION_IMPORTANT_NOTES_DB",
+    "daily": "NOTION_DAILY_NOTES_DB",
+    "project": "NOTION_PROJECT_NOTES_DB",
+    "coding": "NOTION_CODING_NOTES_DB",
+    "test": "NOTION_TEST_DB"
+  },
+  "propertyTypes": {
+    "date": "date",
+    "tags": "multi_select",
+    "meeting_topics": "multi_select",
+    "attendees": "multi_select"
+  },
+  "specialProperties": {
+    "Related Links": {
+      "type": "rich_text",
+      "required": true
+    }
+  },
+  "defaultType": "rich_text"
+} 

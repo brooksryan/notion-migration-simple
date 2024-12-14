@@ -12,38 +12,28 @@ const path = require('path');
  * @param {string} filename - The name of the file being read.
  */
 function parseFrontmatter(content, filename) {
-    //TODO: update to retreive all properties in the frontmatter
-    
     const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
-    console.log(JSON.stringify(content))
+    
     if (!match) {
-      // No frontmatter found
-      console.log('No frontmatter found');
       return {
-        frontmatter: { title: filename, tags: [] },
+        frontmatter: { page: filename, tags: [] },
         body: content
       };
     }
   
     const frontmatterStr = match[1];
     const body = match[2].trim();
+    
+    // Parse all frontmatter properties
     const frontmatter = yaml.load(frontmatterStr) || {};
 
-    console.log(frontmatterStr)
-  
-    // Always set title to filename
-    frontmatter.title = filename;
-  
-    // Ensure tags is always an array
-    // If tags is not defined, default to empty array
-    // If tags is a string or another type, wrap it in an array
-    if (frontmatter.tags === undefined) {
-      frontmatter.tags = [];
-    } else if (!Array.isArray(frontmatter.tags)) {
-      frontmatter.tags = [frontmatter.tags];
-    }
+    // Ensure required properties exist
+    frontmatter.page = frontmatter.page || filename;
+    frontmatter.tags = Array.isArray(frontmatter.tags) ? frontmatter.tags 
+                    : frontmatter.tags ? [frontmatter.tags] 
+                    : [];
   
     return { frontmatter, body };
-  }
-  
-  module.exports = parseFrontmatter;
+}
+
+module.exports = parseFrontmatter;

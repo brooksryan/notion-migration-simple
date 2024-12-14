@@ -15,30 +15,34 @@ async function createNotionPageFromMd(markdownFilePath, databaseType = 'default'
     const { convertToNotionBlocksWithMartian } = require('./obsidian/markdownToNotionBlocks');
     const createPage = require('./notion/createNewPage');
 
-    // Read and parse the markdown file
-    const markdownContent = fs.readFileSync(markdownFilePath, 'utf-8');
-    const filename = markdownFilePath
-        .split('/')
-        .pop()
-        .replace(/\.[^/.]+$/, '');
+    try {
+        // Read and parse the markdown file
+        const markdownContent = fs.readFileSync(markdownFilePath, 'utf-8');
+        const filename = markdownFilePath
+            .split('/')
+            .pop()
+            .replace(/\.[^/.]+$/, '');
 
-    // Extract frontmatter and body
-    const { frontmatter, body } = parseFrontmatter(markdownContent, filename);
+        // Extract frontmatter and body
+        const { frontmatter, body } = parseFrontmatter(markdownContent, filename);
 
-    // Process wiki links
-    const { wikiLinks, modifiedBody } = parseMarkdownBody(body);
+        // Process wiki links
+        const { wikiLinks, modifiedBody } = parseMarkdownBody(body);
 
-    // Convert markdown to Notion blocks
-    const notionBlocks = convertToNotionBlocksWithMartian(modifiedBody);
+        // Convert markdown to Notion blocks
+        const notionBlocks = convertToNotionBlocksWithMartian(modifiedBody);
 
-    // Create the page in Notion
-    await createPage({
-        title: frontmatter.title,
-        tags: frontmatter.tags,
-        notionBlocks,
-        wikiLinks,
-        databaseType
-    });
+        // Create the page in Notion
+        await createPage({
+            properties: frontmatter,
+            notionBlocks,
+            wikiLinks,
+            databaseType
+        });
+    } catch (error) {
+        console.error('Failed to create Notion page:', error.message);
+        throw error;
+    }
 }
 
 module.exports = createNotionPageFromMd;
