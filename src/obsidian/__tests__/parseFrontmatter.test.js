@@ -5,14 +5,14 @@ const parseFrontmatter = require('../parseFrontmatter'); // relative path to the
 describe('parseFrontmatter', () => {
   const fixturesDir = path.join(__dirname, 'fixtures');
 
-  it('returns filename as title if no frontmatter is found', () => {
+  it('returns filename as page name if no frontmatter is found', () => {
     const filePath = path.join(fixturesDir, 'noFrontmatter.md');
     const content = fs.readFileSync(filePath, 'utf8');
     const filename = path.basename(filePath); // e.g. "noFrontmatter.md"
 
     const { frontmatter, body } = parseFrontmatter(content, filename);
     
-    expect(frontmatter.title).toBe(filename);
+    expect(frontmatter.page).toBe(filename);
     expect(body).toBe(content);
   });
 
@@ -23,7 +23,7 @@ describe('parseFrontmatter', () => {
 
     const { frontmatter, body } = parseFrontmatter(content, filename);
 
-    expect(frontmatter.title).toBe(filename);
+    expect(frontmatter.page).toBe(filename);
     expect(frontmatter.tags).toEqual(expect.arrayContaining(['coding']));
     expect(body).toBe("Here is the body of the note.");
   });
@@ -35,7 +35,7 @@ describe('parseFrontmatter', () => {
   
     const { frontmatter, body } = parseFrontmatter(content, filename);
   
-    expect(frontmatter.title).toBe(filename);
+    expect(frontmatter.page).toBe(filename);
     // Since no tags are defined, it should be an empty array
     expect(frontmatter.tags).toEqual([]);
     expect(body).toBe("Just some content without frontmatter");

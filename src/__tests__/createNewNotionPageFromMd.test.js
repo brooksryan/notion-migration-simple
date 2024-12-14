@@ -11,7 +11,7 @@ describe('createNewNotionPageFromMd Integration', () => {
     // Set up test environment
     process.env = {
       ...originalEnv,
-      NOTION_CODING_NOTES_DB: TEST_DB_ID
+      NOTION_TEST_DB: TEST_DB_ID
     };
   });
 
@@ -24,10 +24,10 @@ describe('createNewNotionPageFromMd Integration', () => {
     const testFilePath = path.join(__dirname, 'fixtures', 'test-coding-notes.md');
     
     // Verify we're using the test database
-    expect(getDatabaseId('coding')).toBe(TEST_DB_ID);
+    expect(getDatabaseId('test')).toBe(TEST_DB_ID);
 
     try {
-      await createNotionPageFromMd(testFilePath, 'coding');
+      await createNotionPageFromMd(testFilePath, 'test');
     } catch (error) {
       console.error('Error creating Notion page:', error);
       throw error;
