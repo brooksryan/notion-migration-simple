@@ -9,7 +9,7 @@ const path = require('path');
  * If no frontmatter is found, returns empty frontmatter and the original content as `body`.
  *
  * @param {string} content - The entire Markdown file content.
- * @param {string} filename - The name of the file being read.
+ * @param {string} filename - The name of the file being read (without extension).
  */
 function parseFrontmatter(content, filename) {
     const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
@@ -28,6 +28,7 @@ function parseFrontmatter(content, filename) {
     const frontmatter = yaml.load(frontmatterStr) || {};
 
     // Ensure required properties exist
+    // Use the filename without extension as the page name if not specified in frontmatter
     frontmatter.page = frontmatter.page || filename;
     frontmatter.tags = Array.isArray(frontmatter.tags) ? frontmatter.tags 
                     : frontmatter.tags ? [frontmatter.tags] 
