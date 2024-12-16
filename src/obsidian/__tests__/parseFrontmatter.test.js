@@ -8,9 +8,9 @@ describe('parseFrontmatter', () => {
   it('returns filename as page name if no frontmatter is found', () => {
     const filePath = path.join(fixturesDir, 'noFrontmatter.md');
     const content = fs.readFileSync(filePath, 'utf8');
-    const filename = path.basename(filePath); // e.g. "noFrontmatter.md"
+    const filename = 'noFrontmatter';
 
-    const { frontmatter, body } = parseFrontmatter(content, filename);
+    const { frontmatter, body } = parseFrontmatter(content, filePath);
     
     expect(frontmatter.page).toBe(filename);
     expect(body).toBe(content);
@@ -19,9 +19,9 @@ describe('parseFrontmatter', () => {
   it('parses YAML frontmatter and returns the rest as body', () => {
     const filePath = path.join(fixturesDir, 'withFrontmatter.md');
     const content = fs.readFileSync(filePath, 'utf8');
-    const filename = path.basename(filePath); // e.g. "withFrontmatter.md"
+    const filename = 'withFrontmatter';
 
-    const { frontmatter, body } = parseFrontmatter(content, filename);
+    const { frontmatter, body } = parseFrontmatter(content, filePath);
 
     expect(frontmatter.page).toBe(filename);
     expect(frontmatter.tags).toEqual(expect.arrayContaining(['coding']));
@@ -31,9 +31,9 @@ describe('parseFrontmatter', () => {
   it('handles frontmatter with no tags property', () => {
     const filePath = path.join(fixturesDir, 'noFrontmatter.md');
     const content = fs.readFileSync(filePath, 'utf8');
-    const filename = path.basename(filePath); // e.g. "withFrontmatterNoTags.md"
+    const filename = 'noFrontmatter';
   
-    const { frontmatter, body } = parseFrontmatter(content, filename);
+    const { frontmatter, body } = parseFrontmatter(content, filePath);
   
     expect(frontmatter.page).toBe(filename);
     // Since no tags are defined, it should be an empty array

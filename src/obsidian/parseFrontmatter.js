@@ -9,10 +9,14 @@ const path = require('path');
  * If no frontmatter is found, returns empty frontmatter and the original content as `body`.
  *
  * @param {string} content - The entire Markdown file content.
- * @param {string} filename - The name of the file being read (without extension).
+ * @param {string} filepath - The full path of the file being read.
  */
-function parseFrontmatter(content, filename) {
+function parseFrontmatter(content, filepath) {
     const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
+    
+    // Extract just the filename without extension
+    const parsedPath = path.parse(filepath);
+    const filename = parsedPath.name;
     
     if (!match) {
       return {

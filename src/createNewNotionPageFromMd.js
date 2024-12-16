@@ -19,10 +19,9 @@ async function createNotionPageFromMd(markdownFilePath, databaseType = 'default'
     try {
         // Read and parse the markdown file
         const markdownContent = fs.readFileSync(markdownFilePath, 'utf-8');
-        const filename = path.basename(markdownFilePath, path.extname(markdownFilePath));
-
-        // Extract frontmatter and body
-        const { frontmatter, body } = parseFrontmatter(markdownContent, filename);
+        
+        // Extract frontmatter and body, passing the full path
+        const { frontmatter, body } = parseFrontmatter(markdownContent, markdownFilePath);
 
         // Process wiki links
         const { wikiLinks, modifiedBody } = parseMarkdownBody(body);

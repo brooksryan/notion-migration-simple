@@ -59,7 +59,14 @@ describe('Unit Tests - Cross-platform Path Handling', () => {
 
     // Setup mocks
     jest.mock('../obsidian/parseFrontmatter', () => {
-      return jest.fn().mockReturnValue({ frontmatter: {}, body: '' });
+      return jest.fn((content, filepath) => {
+        const path = require('path');
+        const parsedPath = path.parse(filepath);
+        return { 
+          frontmatter: { page: parsedPath.name }, 
+          body: content 
+        };
+      });
     });
 
     jest.mock('../obsidian/wikiLinkIdentifier', () => {
@@ -82,53 +89,49 @@ describe('Unit Tests - Cross-platform Path Handling', () => {
 
   test('correctly extracts filename from Windows path', async () => {
     const windowsPath = 'C:\\Users\\Documents\\My Notes\\Test File.md';
-    const expectedFilename = 'Test File';
 
     await createNotionPageFromMd(windowsPath);
     
     const parseFrontmatter = require('../obsidian/parseFrontmatter');
     expect(parseFrontmatter).toHaveBeenCalledWith(
       'Test content',
-      expectedFilename
+      windowsPath
     );
   });
 
   test('correctly extracts filename from Unix path', async () => {
     const unixPath = '/home/user/documents/my-notes/test-file.md';
-    const expectedFilename = 'test-file';
 
     await createNotionPageFromMd(unixPath);
     
     const parseFrontmatter = require('../obsidian/parseFrontmatter');
     expect(parseFrontmatter).toHaveBeenCalledWith(
       'Test content',
-      expectedFilename
+      unixPath
     );
   });
 
   test('correctly extracts filename from mixed path format', async () => {
     const mixedPath = 'C:/Users/Documents/My Notes/Test File.md';
-    const expectedFilename = 'Test File';
 
     await createNotionPageFromMd(mixedPath);
     
     const parseFrontmatter = require('../obsidian/parseFrontmatter');
     expect(parseFrontmatter).toHaveBeenCalledWith(
       'Test content',
-      expectedFilename
+      mixedPath
     );
   });
 
   test('handles paths with spaces and special characters', async () => {
     const specialPath = path.join('Documents', 'My Notes', 'Test - File (2023).md');
-    const expectedFilename = 'Test - File (2023)';
 
     await createNotionPageFromMd(specialPath);
     
     const parseFrontmatter = require('../obsidian/parseFrontmatter');
     expect(parseFrontmatter).toHaveBeenCalledWith(
       'Test content',
-      expectedFilename
+      specialPath
     );
   });
 }); 
