@@ -5,13 +5,20 @@
     "daily": "NOTION_DAILY_NOTES_DB",
     "project": "NOTION_PROJECT_NOTES_DB",
     "coding": "NOTION_CODING_NOTES_DB",
-    "test": "NOTION_TEST_DB"
+    "test": "NOTION_TEST_DB",
+    "professional notes": "NOTION_PROFESSIONAL_NOTES_DB"
   },
   "propertyTypes": {
     "date": "date",
+    "Date": "date",
     "tags": "multi_select",
+    "Tags": "multi_select",
     "meeting_topics": "multi_select",
-    "attendees": "multi_select"
+    "Meeting_topics": "multi_select",
+    "meeting topics": "multi_select",
+    "Meeting Topics": "multi_select",
+    "attendees": "multi_select",
+    "Attendees": "multi_select"
   },
   "specialProperties": {
     "Related Links": {

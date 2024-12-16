@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "bin": {
+    "migrate-note": "./src/cli.js"
+  },
   "scripts": {
     "test": "jest --coverage"
   },
@@ -13,7 +16,9 @@
     "@notionhq/client": "^2.2.15",
     "@tryfabric/martian": "^1.2.4",
     "dotenv": "^16.4.7",
-    "js-yaml": "^4.1.0"
+    "inquirer": "^8.2.5",
+    "js-yaml": "^4.1.0",
+    "winston": "^3.11.0"
   },
   "devDependencies": {
     "jest": "^29.7.0"
