@@ -1,5 +1,6 @@
 const { getPropertyType, isSpecialProperty, getSpecialPropertyConfig } = require('./config');
 const notion = require('./notionClient');
+const logger = require('../utils/logger');
 
 /**
  * Formats a property name to Title Case
@@ -22,22 +23,42 @@ function formatPropertyName(name) {
  * @param {string} databaseId - The ID of the database
  * @param {string} propertyName - The name of the property to create
  * @param {string} propertyType - The type of property to create
+ * @param {Array} options - Options for multi-select properties
  */
-async function createDatabaseProperty(databaseId, propertyName, propertyType) {
+async function createDatabaseProperty(databaseId, propertyName, propertyType, options = []) {
+  logger.basic(`Creating new property "${propertyName}" of type "${propertyType}"`);
+  
   try {
     const propertyConfig = {
       [propertyName]: {
         type: propertyType,
-        [propertyType]: {} // Add empty configuration for the specific type
+        [propertyType]: propertyType === 'multi_select' ? {
+          options: options.map(option => ({
+            name: option.toString()
+          }))
+        } : {}
       }
     };
 
+    logger.detailed('Property configuration:', { context: propertyConfig });
+    
     await notion.databases.update({
       database_id: databaseId,
       properties: propertyConfig
     });
+    
+    logger.basic(`Successfully created property "${propertyName}"`);
   } catch (error) {
-    throw new Error(`Failed to create property "${propertyName}": ${error.message}`);
+    logger.error(`Failed to create property "${propertyName}"`, {
+      error,
+      context: {
+        databaseId,
+        propertyName,
+        propertyType,
+        options
+      }
+    });
+    throw error;
   }
 }
 
@@ -48,33 +69,88 @@ async function createDatabaseProperty(databaseId, propertyName, propertyType) {
  * @returns {Promise<Object>} Property mappings for page creation
  */
 async function ensureProperties(databaseId, frontmatter) {
-  const database = await notion.databases.retrieve({ database_id: databaseId });
-  const existingProperties = database.properties;
-  const propertyMappings = {};
+  logger.basic('Starting property validation for database');
+  logger.detailed('Frontmatter content:', { context: frontmatter });
 
-  // Handle special properties first
-  if (!existingProperties['Related Links']) {
-    const config = getSpecialPropertyConfig('Related Links');
-    await createDatabaseProperty(databaseId, 'Related Links', config.type);
-  }
+  try {
+    const database = await notion.databases.retrieve({ database_id: databaseId });
+    const existingProperties = database.properties;
+    const propertyMappings = {};
 
-  // Handle frontmatter properties
-  for (const [key, value] of Object.entries(frontmatter)) {
-    const formattedName = formatPropertyName(key);
-    
-    if (!existingProperties[formattedName]) {
-      // Special case for Page property - it should be title type
-      const propertyType = key.toLowerCase() === 'page' ? 'title' : getPropertyType(key);
-      await createDatabaseProperty(databaseId, formattedName, propertyType);
+    logger.detailed('Retrieved existing database properties', {
+      context: { properties: Object.keys(existingProperties) }
+    });
+
+    // Handle special properties first
+    if (!existingProperties['Related Links']) {
+      logger.basic('Creating special property: Related Links');
+      const config = getSpecialPropertyConfig('Related Links');
+      await createDatabaseProperty(databaseId, 'Related Links', config.type);
     }
 
-    propertyMappings[key] = {
-      name: formattedName,
-      type: existingProperties[formattedName]?.type || (key.toLowerCase() === 'page' ? 'title' : getPropertyType(key))
-    };
-  }
+    // Handle frontmatter properties
+    for (const [key, value] of Object.entries(frontmatter)) {
+      const formattedName = formatPropertyName(key);
+      const propertyType = key.toLowerCase() === 'page' ? 'title' : getPropertyType(key);
+      
+      logger.detailed(`Processing property: ${key}`, {
+        context: {
+          formattedName,
+          propertyType,
+          value
+        }
+      });
 
-  return propertyMappings;
+      if (!existingProperties[formattedName]) {
+        // For multi-select properties, pass the current values as options
+        const options = propertyType === 'multi_select' && Array.isArray(value) ? value : [];
+        await createDatabaseProperty(databaseId, formattedName, propertyType, options);
+      } else if (propertyType === 'multi_select' && Array.isArray(value)) {
+        // Update existing multi-select property with new options
+        const existingOptions = existingProperties[formattedName].multi_select.options;
+        const existingOptionNames = existingOptions.map(opt => opt.name);
+        const newOptions = value.filter(opt => !existingOptionNames.includes(opt.toString()));
+        
+        if (newOptions.length > 0) {
+          logger.detailed(`Adding new options to "${formattedName}"`, {
+            context: { newOptions }
+          });
+
+          await notion.databases.update({
+            database_id: databaseId,
+            properties: {
+              [formattedName]: {
+                multi_select: {
+                  options: [...existingOptions, ...newOptions.map(opt => ({ name: opt.toString() }))]
+                }
+              }
+            }
+          });
+          
+          logger.basic(`Updated multi-select options for "${formattedName}"`);
+        }
+      }
+
+      propertyMappings[key] = {
+        name: formattedName,
+        type: propertyType
+      };
+    }
+
+    logger.basic('Completed property validation');
+    logger.detailed('Final property mappings:', { context: propertyMappings });
+
+    return propertyMappings;
+  } catch (error) {
+    logger.error('Failed to ensure properties', {
+      error,
+      context: {
+        databaseId,
+        frontmatterKeys: Object.keys(frontmatter)
+      }
+    });
+    throw error;
+  }
 }
 
 /**
@@ -84,38 +160,67 @@ async function ensureProperties(databaseId, frontmatter) {
  * @returns {Object} Formatted property value for Notion
  */
 function formatPropertyValue(value, type) {
-  switch (type) {
-    case 'title':
-      return {
-        title: [{
-          text: {
-            content: value.toString()
+  logger.detailed('Formatting property value', {
+    context: {
+      value,
+      type
+    }
+  });
+
+  let formattedValue;
+  try {
+    switch (type) {
+      case 'title':
+        formattedValue = {
+          title: [{
+            text: {
+              content: value.toString()
+            }
+          }]
+        };
+        break;
+      case 'date':
+        formattedValue = {
+          date: {
+            start: value
           }
-        }]
-      };
-    case 'date':
-      return {
-        date: {
-          start: value
-        }
-      };
-    case 'multi_select':
-      const selections = Array.isArray(value) ? value : [value];
-      return {
-        multi_select: selections.map(item => ({ name: item.toString() }))
-      };
-    case 'rich_text':
-      return {
-        rich_text: [{
-          text: {
-            content: value.toString()
-          }
-        }]
-      };
-    default:
-      return {
-        [type]: value
-      };
+        };
+        break;
+      case 'multi_select':
+        const selections = Array.isArray(value) ? value : [value];
+        formattedValue = {
+          multi_select: selections.map(item => ({ name: item.toString() }))
+        };
+        break;
+      case 'rich_text':
+        formattedValue = {
+          rich_text: [{
+            text: {
+              content: value.toString()
+            }
+          }]
+        };
+        break;
+      default:
+        formattedValue = {
+          [type]: value
+        };
+    }
+
+    logger.detailed('Formatted property value', {
+      context: { formattedValue }
+    });
+
+    return formattedValue;
+  } catch (error) {
+    logger.error('Failed to format property value', {
+      error,
+      context: {
+        originalValue: value,
+        type
+      }
+    });
+    throw error;
   }
 }
 
