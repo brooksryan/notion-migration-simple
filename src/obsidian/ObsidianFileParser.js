@@ -9,7 +9,7 @@ const markdownContent = fs.readFileSync('./src/obsidian/markdown-files/coding-no
 // Extract frontmatter and body
 const { frontmatter, body } = parseFrontmatter(markdownContent);
 
-// Extract wiki links and replace with placeholders
+// Extract wiki links (previously replaced with placeholders)
 const { wikiLinks, modifiedBody } = parseMarkdownBody(body);
 
 // Now convert the modifiedBody to Notion blocks
