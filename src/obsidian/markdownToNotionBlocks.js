@@ -27,16 +27,85 @@ function convertWindowsLineBreaksToUnix(modifiedBody) {
  * Pre-processes markdown to handle our custom syntax before Martian conversion
  */
 function preprocessMarkdown(markdown) {
-    // {{ Convert Obsidian image references => [🖼 filename.ext] }}
+    // Convert Obsidian image references => [🖼 filename.ext]
     markdown = markdown.replace(/\!\[\[([^\]]+\.(?:png|jpe?g|gif|svg))\]\]/gi, '[🖼 $1]');
 
-    // {{ Convert Obsidian wiki links => standard Markdown links }}
-    markdown = markdown.replace(/\[\[([^\]]+)\]\]/g, '[$1]($1)');
+    // Handle wiki-links with display text
+    markdown = markdown.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '[$2]($1)');
+    
+    // Handle wiki-links with special characters
+    markdown = markdown.replace(/\[\[([^\]]+)\]\]/g, (match, p1) => {
+        // Remove any characters that would make invalid URLs
+        const sanitizedLink = p1.replace(/[^\w\s-]/g, '').trim();
+        // Use original text as display, sanitized version as URL
+        return `[${p1}](${sanitizedLink})`;
+    });
 
     // Ensure headers have space after #
     markdown = markdown.replace(/^(#{1,6})([^#\s])/gm, '$1 $2');
 
+    // Normalize tables to ensure consistent column counts
+    markdown = normalizeTableColumns(markdown);
+
     return markdown;
+}
+
+/**
+ * Normalizes tables in markdown to ensure consistent column counts
+ * @param {string} markdown The markdown content
+ * @returns {string} Normalized markdown
+ */
+function normalizeTableColumns(markdown) {
+    // Split into lines
+    const lines = markdown.split('\n');
+    let inTable = false;
+    let maxColumns = 0;
+    let tableStart = 0;
+
+    // First pass: detect tables and count max columns
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line.startsWith('|') && line.endsWith('|')) {
+            if (!inTable) {
+                inTable = true;
+                tableStart = i;
+                maxColumns = (line.match(/\|/g) || []).length - 1;
+            } else {
+                maxColumns = Math.max(maxColumns, (line.match(/\|/g) || []).length - 1);
+            }
+        } else if (inTable) {
+            // Found end of table, normalize it
+            normalizeTableSection(lines, tableStart, i - 1, maxColumns);
+            inTable = false;
+        }
+    }
+
+    // Handle case where table extends to end of input
+    if (inTable) {
+        normalizeTableSection(lines, tableStart, lines.length - 1, maxColumns);
+    }
+
+    return lines.join('\n');
+}
+
+/**
+ * Normalizes a section of markdown table
+ * @param {string[]} lines Array of markdown lines
+ * @param {number} start Start index of table
+ * @param {number} end End index of table
+ * @param {number} maxColumns Maximum number of columns
+ */
+function normalizeTableSection(lines, start, end, maxColumns) {
+    for (let i = start; i <= end; i++) {
+        const line = lines[i].trim();
+        if (line.startsWith('|') && line.endsWith('|')) {
+            const cells = line.slice(1, -1).split('|');
+            while (cells.length < maxColumns) {
+                cells.push(''); // Add empty cells to match max columns
+            }
+            lines[i] = '|' + cells.slice(0, maxColumns).join('|') + '|';
+        }
+    }
 }
 
 /**
