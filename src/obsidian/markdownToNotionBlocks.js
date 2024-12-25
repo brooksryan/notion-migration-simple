@@ -30,24 +30,97 @@ function preprocessMarkdown(markdown) {
     // Convert Obsidian image references => [🖼 filename.ext]
     markdown = markdown.replace(/\!\[\[([^\]]+\.(?:png|jpe?g|gif|svg))\]\]/gi, '[🖼 $1]');
 
-    // Handle wiki-links with display text
-    markdown = markdown.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '[$2]($1)');
+    // Split content to preserve code blocks
+    const segments = splitPreservingCodeBlocks(markdown);
     
-    // Handle wiki-links with special characters
-    markdown = markdown.replace(/\[\[([^\]]+)\]\]/g, (match, p1) => {
-        // Remove any characters that would make invalid URLs
-        const sanitizedLink = p1.replace(/[^\w\s-]/g, '').trim();
-        // Use original text as display, sanitized version as URL
-        return `[${p1}](${sanitizedLink})`;
-    });
+    // Process each non-code segment
+    const processed = segments.map(segment => {
+        if (segment.isCode) {
+            return segment.content;
+        }
+        
+        let content = segment.content;
+        
+        // Handle wiki-links with display text first
+        content = content.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, (_, link, display) => {
+            return `[${display}](${sanitizeLink(link)})`;
+        });
+        
+        // Handle regular wiki-links, including nested brackets
+        content = content.replace(/\[\[((?:[^\]]|\][^\]])*)\]\]/g, (match, inner) => {
+            if (!inner.trim()) return match; // Preserve empty links exactly
+            return `[${inner}](${sanitizeLink(inner)})`;
+        });
+
+        return content;
+    }).join('');
 
     // Ensure headers have space after #
-    markdown = markdown.replace(/^(#{1,6})([^#\s])/gm, '$1 $2');
+    return processed.replace(/^(#{1,6})([^#\s])/gm, '$1 $2');
+}
 
-    // Normalize tables to ensure consistent column counts
-    markdown = normalizeTableColumns(markdown);
+/**
+ * Splits markdown content preserving code blocks
+ * @param {string} markdown The markdown content
+ * @returns {Array<{content: string, isCode: boolean}>}
+ */
+function splitPreservingCodeBlocks(markdown) {
+    const segments = [];
+    let currentSegment = '';
+    let inCodeBlock = false;
+    
+    const lines = markdown.split('\n');
+    
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const isCodeFence = line.trim().startsWith('```');
+        
+        if (isCodeFence) {
+            // Save current segment if exists
+            if (currentSegment) {
+                segments.push({
+                    content: currentSegment,
+                    isCode: inCodeBlock
+                });
+            }
+            // Start new segment
+            currentSegment = line + (i < lines.length - 1 ? '\n' : '');
+            inCodeBlock = !inCodeBlock;
+        } else {
+            currentSegment += line + (i < lines.length - 1 ? '\n' : '');
+        }
+    }
+    
+    // Add final segment
+    if (currentSegment) {
+        segments.push({
+            content: currentSegment,
+            isCode: inCodeBlock
+        });
+    }
+    
+    return segments;
+}
 
-    return markdown;
+/**
+ * Sanitizes a wiki-link for use as a URL
+ * @param {string} link The link text to sanitize
+ * @returns {string} Sanitized link
+ */
+function sanitizeLink(link) {
+    const sanitized = link
+        .trim()
+        .toLowerCase()
+        // Replace spaces and special characters with hyphens
+        .replace(/[^\w\s-]/g, '')
+        .replace(/\s+/g, '-')
+        // Remove duplicate hyphens
+        .replace(/-+/g, '-')
+        // Remove leading/trailing hyphens
+        .replace(/^-+|-+$/g, '');
+
+    // Use a placeholder domain to ensure valid URLs
+    return `https://notion-links/${encodeURIComponent(sanitized)}`;
 }
 
 /**
@@ -291,5 +364,9 @@ function convertToNotionBlocks(modifiedBody) {
     return notionBlocks;
 }
 
-module.exports = { convertToNotionBlocks, convertToNotionBlocksWithMartian };
+module.exports = { 
+    convertToNotionBlocks, 
+    convertToNotionBlocksWithMartian,
+    preprocessMarkdown
+};
   
