@@ -27,13 +27,12 @@ function convertWindowsLineBreaksToUnix(modifiedBody) {
  * Pre-processes markdown to handle our custom syntax before Martian conversion
  */
 function preprocessMarkdown(markdown) {
-    // Replace our wiki link syntax with standard markdown links
+    // {{ Convert Obsidian image references => [🖼 filename.ext] }}
+    markdown = markdown.replace(/\!\[\[([^\]]+\.(?:png|jpe?g|gif|svg))\]\]/gi, '[🖼 $1]');
+
+    // {{ Convert Obsidian wiki links => standard Markdown links }}
     markdown = markdown.replace(/\[\[([^\]]+)\]\]/g, '[$1]($1)');
-    
-    // Convert image references to text links for now
-    // TODO: Replace with proper image handling in the future
-    markdown = markdown.replace(/!\[~~~([^\]]+)~~~\]/g, '[🖼 $1]');
-    
+
     // Ensure headers have space after #
     markdown = markdown.replace(/^(#{1,6})([^#\s])/gm, '$1 $2');
 
@@ -44,7 +43,83 @@ function preprocessMarkdown(markdown) {
  * Post-processes Notion blocks to fix any conversion issues
  */
 function postprocessBlocks(blocks) {
-    return blocks.filter(Boolean);
+    const newBlocks = [];
+    for (const block of blocks) {
+        // Only handle paragraph blocks with text
+        if (block.type === 'paragraph' && block.paragraph?.rich_text?.length) {
+            // We'll create multiple blocks if we find “[🖼 …]” references
+            const splitBlocks = splitOutImages(block);
+            newBlocks.push(...splitBlocks);
+        } else {
+            // Keep non-paragraph blocks as-is
+            newBlocks.push(block);
+        }
+    }
+    return newBlocks.filter(Boolean);
+}
+
+/**
+ * Splits any “[🖼 filename.ext]” references from a paragraph block into separate blocks.
+ * This way, images end up in their own blocks.
+ */
+function splitOutImages(paragraphBlock) {
+    const results = [];
+    const baseBlock = JSON.parse(JSON.stringify(paragraphBlock));
+    baseBlock.paragraph.rich_text = [];
+
+    // We'll iterate over each text segment in the paragraph
+    for (const rt of paragraphBlock.paragraph.rich_text) {
+        const content = rt.text?.content || '';
+        // Split on “[🖼 filename]” patterns
+        // Note: capturing group 1 is the filename
+        const pieces = content.split(/\[🖼 ([^\]]+)\]/g);
+
+        if (pieces.length === 1) {
+            // No image tokens here; keep entire piece in the running paragraph
+            baseBlock.paragraph.rich_text.push(rt);
+        } else {
+            // We have text before/after images
+            // Example pieces: [textBefore, imageFileOne, textBetween, imageFileTwo, textAfter]
+            let isImage = false;
+            for (const piece of pieces) {
+                if (!isImage) {
+                    // text chunk
+                    if (piece) {
+                        // clone the current RT but update the content
+                        const newRT = JSON.parse(JSON.stringify(rt));
+                        newRT.text.content = piece;
+                        baseBlock.paragraph.rich_text.push(newRT);
+                    }
+                } else {
+                    // image chunk => separate block
+                    // First push any text we have accumulated so far as one block
+                    if (baseBlock.paragraph.rich_text.length > 0) {
+                        results.push(JSON.parse(JSON.stringify(baseBlock)));
+                        baseBlock.paragraph.rich_text = [];
+                    }
+                    // Create a block dedicated to this image reference
+                    results.push({
+                        object: 'block',
+                        type: 'paragraph',
+                        paragraph: {
+                            rich_text: [{
+                                type: 'text',
+                                text: { content: `[🖼 ${piece}]` }
+                            }]
+                        }
+                    });
+                }
+                isImage = !isImage; 
+            }
+        }
+    }
+
+    // If any trailing text is left in baseBlock, push it
+    if (baseBlock.paragraph.rich_text.length > 0) {
+        results.push(baseBlock);
+    }
+
+    return results;
 }
 
 function convertToNotionBlocksWithMartian(markdown) {
@@ -97,75 +172,46 @@ function convertToNotionBlocks(modifiedBody) {
     logger.basic('Using basic block conversion');
     const lines = modifiedBody.split('\n');
     const notionBlocks = [];
-  
-    // Regex to identify placeholders and images
-    const placeholderRegex = /\[~~~([^\]]+)~~~\]/g;
-    const imageRegex = /!\[~~~([^\]]+)~~~\]/;
-  
+
+    // If you want to ensure images have their own block even in the fallback,
+    // handle lines that contain “[🖼 …]” by splitting them out.
+    // A quick version is: if a line is exactly “[🖼 …]”, treat it as an image block.
+    // Or we can parse partial lines and split them, similar to postprocessBlocks.
+
     for (const line of lines) {
         if (!line.trim()) continue; // Skip empty lines
 
-        // Convert image references to text
-        let processedLine = line;
-        if (line.match(imageRegex)) {
-            processedLine = line.replace(imageRegex, '🖼 $1');
+        // If the entire line is just an image reference => own block
+        const imageMatch = line.trim().match(/^\[🖼 ([^\]]+)\]$/);
+        if (imageMatch) {
+            notionBlocks.push({
+                object: 'block',
+                type: 'paragraph',
+                paragraph: {
+                    rich_text: [{
+                        type: 'text',
+                        text: { content: line.trim() }
+                    }]
+                }
+            });
+            continue;
         }
 
-        // Handle regular text with wiki links
-        const rich_text = [];
-        let lastIndex = 0;
-        let match;
-  
-        while ((match = placeholderRegex.exec(processedLine)) !== null) {
-            // Text before the placeholder
-            const textBefore = processedLine.slice(lastIndex, match.index);
-            if (textBefore) {
-                rich_text.push({
+        // Otherwise, create a normal paragraph block for this line
+        notionBlocks.push({
+            object: "block",
+            type: "paragraph",
+            paragraph: {
+                rich_text: [{
                     type: "text",
                     text: {
-                        content: textBefore
+                        content: line
                     }
-                });
+                }]
             }
-    
-            // The placeholder itself
-            const placeholderContent = match[1];
-            rich_text.push({
-                type: "text",
-                text: {
-                    content: placeholderContent
-                },
-                annotations: {
-                    italic: true
-                }
-            });
-    
-            lastIndex = placeholderRegex.lastIndex;
-        }
-  
-        // Any remaining text after the last placeholder
-        const remainingText = processedLine.slice(lastIndex);
-        if (remainingText) {
-            rich_text.push({
-                type: "text",
-                text: {
-                    content: remainingText
-                }
-            });
-        }
-  
-        // Create a paragraph block for this line
-        if (rich_text.length > 0) {
-            notionBlocks.push({
-                object: "block",
-                type: "paragraph",
-                paragraph: {
-                    rich_text
-                }
-            });
-        }
+        });
     }
-  
+
     logger.detailed('Basic conversion complete', {
         context: {
             blockCount: notionBlocks.length,

@@ -18,8 +18,8 @@ function parseMarkdownBody(body) {
       wikiLinks.push(match[1].trim());
     }
   
-    // Replace the wiki links with a unique placeholder
-    const modifiedBody = body.replace(wikiLinkRegex, '[~~~$1~~~]');
+    // {{ Removed old placeholder replacement; keep body unmodified }}
+    const modifiedBody = body; // previously replaced with [~~~…~~~]
   
     return { wikiLinks, modifiedBody };
   }
