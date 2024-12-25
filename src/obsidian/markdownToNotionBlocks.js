@@ -52,6 +52,9 @@ function preprocessMarkdown(markdown) {
             return `[${inner}](${sanitizeLink(inner)})`;
         });
 
+        // Normalize tables in this segment
+        content = normalizeTableColumns(content);
+
         return content;
     }).join('');
 
@@ -108,7 +111,7 @@ function splitPreservingCodeBlocks(markdown) {
  * @returns {string} Sanitized link
  */
 function sanitizeLink(link) {
-    const sanitized = link
+    return link
         .trim()
         .toLowerCase()
         // Replace spaces and special characters with hyphens
@@ -118,9 +121,6 @@ function sanitizeLink(link) {
         .replace(/-+/g, '-')
         // Remove leading/trailing hyphens
         .replace(/^-+|-+$/g, '');
-
-    // Use a placeholder domain to ensure valid URLs
-    return `https://notion-links/${encodeURIComponent(sanitized)}`;
 }
 
 /**
@@ -129,11 +129,11 @@ function sanitizeLink(link) {
  * @returns {string} Normalized markdown
  */
 function normalizeTableColumns(markdown) {
-    // Split into lines
     const lines = markdown.split('\n');
     let inTable = false;
     let maxColumns = 0;
     let tableStart = 0;
+    let hasSeparator = false;
 
     // First pass: detect tables and count max columns
     for (let i = 0; i < lines.length; i++) {
@@ -142,23 +142,51 @@ function normalizeTableColumns(markdown) {
             if (!inTable) {
                 inTable = true;
                 tableStart = i;
-                maxColumns = (line.match(/\|/g) || []).length - 1;
+                maxColumns = countTableColumns(line);
+            } else if (line.includes('-')) {
+                // This is a separator row
+                hasSeparator = true;
+                // Keep original separator style
+                lines[i] = line;
             } else {
-                maxColumns = Math.max(maxColumns, (line.match(/\|/g) || []).length - 1);
+                maxColumns = Math.max(maxColumns, countTableColumns(line));
             }
         } else if (inTable) {
             // Found end of table, normalize it
-            normalizeTableSection(lines, tableStart, i - 1, maxColumns);
+            if (hasSeparator) {
+                normalizeTableSection(lines, tableStart, i - 1, maxColumns);
+            }
             inTable = false;
+            hasSeparator = false;
         }
     }
 
     // Handle case where table extends to end of input
-    if (inTable) {
+    if (inTable && hasSeparator) {
         normalizeTableSection(lines, tableStart, lines.length - 1, maxColumns);
     }
 
     return lines.join('\n');
+}
+
+/**
+ * Counts the number of columns in a table row
+ * @param {string} line The table row
+ * @returns {number} Number of columns
+ */
+function countTableColumns(line) {
+    // Remove leading/trailing pipes and split
+    const cells = line.slice(1, -1).split('|');
+    return cells.length;
+}
+
+/**
+ * Creates a properly formatted separator row
+ * @param {number} columns Number of columns
+ * @returns {string} Formatted separator row
+ */
+function createSeparatorRow(columns) {
+    return '|' + Array(columns).fill('---|').join('') + '|';
 }
 
 /**
@@ -171,14 +199,61 @@ function normalizeTableColumns(markdown) {
 function normalizeTableSection(lines, start, end, maxColumns) {
     for (let i = start; i <= end; i++) {
         const line = lines[i].trim();
-        if (line.startsWith('|') && line.endsWith('|')) {
-            const cells = line.slice(1, -1).split('|');
+        if (line.startsWith('|') && line.endsWith('|') && !line.includes('-')) {
+            // Split the line into cells, preserving content with pipes
+            const cells = splitTableCells(line);
+            
+            // Pad or trim cells to match maxColumns
             while (cells.length < maxColumns) {
-                cells.push(''); // Add empty cells to match max columns
+                cells.push('');
             }
-            lines[i] = '|' + cells.slice(0, maxColumns).join('|') + '|';
+            if (cells.length > maxColumns) {
+                cells.length = maxColumns;
+            }
+
+            // Rebuild the line preserving original spacing
+            const originalCells = line.slice(1, -1).split('|');
+            const spacing = originalCells.map(cell => {
+                const match = cell.match(/^(\s*)[^\s]*?(\s*)$/);
+                return match ? { before: match[1].length, after: match[2].length } : { before: 1, after: 1 };
+            });
+
+            lines[i] = '|' + cells.map((cell, idx) => {
+                const space = spacing[idx] || { before: 1, after: 1 };
+                return ' '.repeat(space.before) + (cell.trim() || '') + ' '.repeat(space.after);
+            }).join('|') + '|';
         }
     }
+}
+
+/**
+ * Splits table cells properly handling pipes within cell content
+ * @param {string} line Table row line
+ * @returns {string[]} Array of cell contents
+ */
+function splitTableCells(line) {
+    // Remove leading/trailing pipes
+    const content = line.slice(1, -1);
+    
+    const cells = [];
+    let currentCell = '';
+    let inCode = false;
+    
+    for (let i = 0; i < content.length; i++) {
+        const char = content[i];
+        if (char === '`') {
+            inCode = !inCode;
+            currentCell += char;
+        } else if (char === '|' && !inCode) {
+            cells.push(currentCell);
+            currentCell = '';
+        } else {
+            currentCell += char;
+        }
+    }
+    cells.push(currentCell);
+    
+    return cells.map(cell => cell.trim());
 }
 
 /**
@@ -362,6 +437,27 @@ function convertToNotionBlocks(modifiedBody) {
     });
 
     return notionBlocks;
+}
+
+function preprocessTable(table) {
+    const lines = table.split('\n');
+    return lines.map(line => {
+        if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
+            const cells = line.split('|');
+            const firstPipe = line.indexOf('|');
+            const lastPipe = line.lastIndexOf('|');
+            const prefix = line.substring(0, firstPipe + 1);
+            const suffix = line.substring(lastPipe);
+            const middleCells = cells.slice(1, -1).map(cell => {
+                const trimmed = cell.trim();
+                const leftSpaces = cell.match(/^\s*/)[0];
+                const rightSpaces = cell.match(/\s*$/)[0];
+                return leftSpaces + trimmed + rightSpaces;
+            });
+            return prefix + middleCells.join('|') + suffix;
+        }
+        return line;
+    }).join('\n');
 }
 
 module.exports = { 
