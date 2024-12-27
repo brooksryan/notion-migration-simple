@@ -24,41 +24,53 @@ function convertWindowsLineBreaksToUnix(modifiedBody) {
 }
 
 /**
+ * Validates and formats a wiki-link for Notion compatibility
+ * @param {string} link The wiki-link text to process
+ * @param {boolean} isDisplayText Whether this is display text (shouldn't be modified)
+ * @returns {string} Processed link text
+ */
+function processWikiLink(link, isDisplayText = false) {
+    if (isDisplayText) return link;
+
+    // Remove any unsafe characters and format for Notion
+    const processed = link
+        .trim()
+        // Replace special characters except those needed for paths
+        .replace(/[^\w\s-./]/g, '')
+        // Replace spaces with hyphens
+        .replace(/\s+/g, '-')
+        // Remove duplicate hyphens
+        .replace(/-+/g, '-')
+        // Remove leading/trailing hyphens
+        .replace(/^-+|-+$/g, '');
+
+    logger.detailed('Processed wiki-link', {
+        original: link,
+        processed: processed
+    });
+
+    return processed;
+}
+
+/**
  * Pre-processes markdown to handle our custom syntax before Martian conversion
  */
 function preprocessMarkdown(markdown) {
-    // Convert Obsidian image references => [🖼 filename.ext]
+    // First handle non-table content
     markdown = markdown.replace(/\!\[\[([^\]]+\.(?:png|jpe?g|gif|svg))\]\]/gi, '[🖼 $1]');
-
-    // Split content to preserve code blocks
-    const segments = splitPreservingCodeBlocks(markdown);
     
-    // Process each non-code segment
-    const processed = segments.map(segment => {
-        if (segment.isCode) {
-            return segment.content;
-        }
-        
-        let content = segment.content;
-        
-        // Handle wiki-links with display text first
-        content = content.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, (_, link, display) => {
-            return `[${display}](${sanitizeLink(link)})`;
-        });
-        
-        // Handle regular wiki-links, including nested brackets
-        content = content.replace(/\[\[((?:[^\]]|\][^\]])*)\]\]/g, (match, inner) => {
-            if (!inner.trim()) return match; // Preserve empty links exactly
-            return `[${inner}](${sanitizeLink(inner)})`;
-        });
-
-        // Normalize tables in this segment
-        content = normalizeTableColumns(content);
-
-        return content;
+    // Process wiki-links outside of tables
+    const segments = splitPreservingCodeBlocks(markdown);
+    let processed = segments.map(segment => {
+        if (segment.isCode) return segment.content;
+        return processWikiLinks(segment.content);
     }).join('');
 
-    // Ensure headers have space after #
+    // Now handle tables separately
+    processed = processed.replace(/(\|[^\n]+\|\n)+/g, (table) => {
+        return convertTableToNotionFormat(table);
+    });
+
     return processed.replace(/^(#{1,6})([^#\s])/gm, '$1 $2');
 }
 
@@ -106,24 +118,6 @@ function splitPreservingCodeBlocks(markdown) {
 }
 
 /**
- * Sanitizes a wiki-link for use as a URL
- * @param {string} link The link text to sanitize
- * @returns {string} Sanitized link
- */
-function sanitizeLink(link) {
-    return link
-        .trim()
-        .toLowerCase()
-        // Replace spaces and special characters with hyphens
-        .replace(/[^\w\s-]/g, '')
-        .replace(/\s+/g, '-')
-        // Remove duplicate hyphens
-        .replace(/-+/g, '-')
-        // Remove leading/trailing hyphens
-        .replace(/^-+|-+$/g, '');
-}
-
-/**
  * Normalizes tables in markdown to ensure consistent column counts
  * @param {string} markdown The markdown content
  * @returns {string} Normalized markdown
@@ -134,39 +128,94 @@ function normalizeTableColumns(markdown) {
     let maxColumns = 0;
     let tableStart = 0;
     let hasSeparator = false;
+    let currentRowCells = null;
 
-    // First pass: detect tables and count max columns
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
+        
         if (line.startsWith('|') && line.endsWith('|')) {
             if (!inTable) {
                 inTable = true;
                 tableStart = i;
                 maxColumns = countTableColumns(line);
-            } else if (line.includes('-')) {
-                // This is a separator row
+                logger.detailed('Starting new table', {
+                    lineNumber: i,
+                    maxColumns: maxColumns
+                });
+            }
+
+            // Handle separator row
+            if (line.includes('---')) {
                 hasSeparator = true;
-                // Keep original separator style
-                lines[i] = line;
+                lines[i] = createSeparatorRow(maxColumns);
+                continue;
+            }
+
+            const cells = splitTableCells(line);
+            
+            // If this is a continuation of a previous row (has fewer columns)
+            if (currentRowCells && cells.length < maxColumns) {
+                // Merge content with previous row's cells
+                cells.forEach((cell, idx) => {
+                    if (currentRowCells[idx]) {
+                        currentRowCells[idx] += '\n' + cell;
+                    }
+                });
             } else {
-                maxColumns = Math.max(maxColumns, countTableColumns(line));
+                // Process and save previous row if exists
+                if (currentRowCells) {
+                    lines[i-1] = formatTableRow(currentRowCells, maxColumns);
+                }
+                // Start new row
+                currentRowCells = cells;
             }
         } else if (inTable) {
-            // Found end of table, normalize it
-            if (hasSeparator) {
-                normalizeTableSection(lines, tableStart, i - 1, maxColumns);
+            // End of table reached
+            if (currentRowCells) {
+                // Process the last row
+                lines[i-1] = formatTableRow(currentRowCells, maxColumns);
+                currentRowCells = null;
             }
             inTable = false;
             hasSeparator = false;
         }
     }
 
-    // Handle case where table extends to end of input
-    if (inTable && hasSeparator) {
-        normalizeTableSection(lines, tableStart, lines.length - 1, maxColumns);
+    // Handle table at end of file
+    if (inTable && currentRowCells) {
+        lines[lines.length-1] = formatTableRow(currentRowCells, maxColumns);
     }
 
     return lines.join('\n');
+}
+
+function formatTableRow(cells, maxColumns) {
+    // Process each cell's content
+    const processedCells = cells.map(cell => {
+        // Convert <br> tags to Notion's line break format
+        let processedCell = cell.replace(/<br>/g, '\n');
+        
+        // Process wiki-links
+        processedCell = processedCell.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, (match, link, display) => {
+            const processedLink = processWikiLink(link);
+            return `[${display}](/page/${processedLink})`;
+        });
+        
+        processedCell = processedCell.replace(/\[\[([^\]]+)\]\]/g, (match, inner) => {
+            const processedLink = processWikiLink(inner);
+            return `[${inner}](/page/${processedLink})`;
+        });
+
+        return processedCell;
+    });
+
+    // Pad with empty cells if needed
+    while (processedCells.length < maxColumns) {
+        processedCells.push('');
+    }
+
+    // Format the row
+    return '|' + processedCells.map(cell => ` ${cell.trim()} `).join('|') + '|';
 }
 
 /**
@@ -190,70 +239,49 @@ function createSeparatorRow(columns) {
 }
 
 /**
- * Normalizes a section of markdown table
- * @param {string[]} lines Array of markdown lines
- * @param {number} start Start index of table
- * @param {number} end End index of table
- * @param {number} maxColumns Maximum number of columns
- */
-function normalizeTableSection(lines, start, end, maxColumns) {
-    for (let i = start; i <= end; i++) {
-        const line = lines[i].trim();
-        if (line.startsWith('|') && line.endsWith('|') && !line.includes('-')) {
-            // Split the line into cells, preserving content with pipes
-            const cells = splitTableCells(line);
-            
-            // Pad or trim cells to match maxColumns
-            while (cells.length < maxColumns) {
-                cells.push('');
-            }
-            if (cells.length > maxColumns) {
-                cells.length = maxColumns;
-            }
-
-            // Rebuild the line preserving original spacing
-            const originalCells = line.slice(1, -1).split('|');
-            const spacing = originalCells.map(cell => {
-                const match = cell.match(/^(\s*)[^\s]*?(\s*)$/);
-                return match ? { before: match[1].length, after: match[2].length } : { before: 1, after: 1 };
-            });
-
-            lines[i] = '|' + cells.map((cell, idx) => {
-                const space = spacing[idx] || { before: 1, after: 1 };
-                return ' '.repeat(space.before) + (cell.trim() || '') + ' '.repeat(space.after);
-            }).join('|') + '|';
-        }
-    }
-}
-
-/**
  * Splits table cells properly handling pipes within cell content
  * @param {string} line Table row line
  * @returns {string[]} Array of cell contents
  */
 function splitTableCells(line) {
-    // Remove leading/trailing pipes
-    const content = line.slice(1, -1);
-    
+    if (!line.trim().startsWith('|') || !line.trim().endsWith('|')) {
+        return [];
+    }
+
+    const content = line.trim().slice(1, -1);
     const cells = [];
     let currentCell = '';
     let inCode = false;
+    let inLink = false;
+    let bracketDepth = 0;
     
     for (let i = 0; i < content.length; i++) {
         const char = content[i];
+        
         if (char === '`') {
             inCode = !inCode;
             currentCell += char;
-        } else if (char === '|' && !inCode) {
-            cells.push(currentCell);
+        } else if (char === '[' && !inCode) {
+            bracketDepth++;
+            inLink = true;
+            currentCell += char;
+        } else if (char === ']' && !inCode) {
+            bracketDepth--;
+            if (bracketDepth === 0) inLink = false;
+            currentCell += char;
+        } else if (char === '|' && !inCode && !inLink && bracketDepth === 0) {
+            cells.push(currentCell.trim());
             currentCell = '';
         } else {
             currentCell += char;
         }
     }
-    cells.push(currentCell);
     
-    return cells.map(cell => cell.trim());
+    if (currentCell) {
+        cells.push(currentCell.trim());
+    }
+
+    return cells;
 }
 
 /**
@@ -458,6 +486,121 @@ function preprocessTable(table) {
         }
         return line;
     }).join('\n');
+}
+
+function logPreprocessingResults(originalMarkdown, processedMarkdown) {
+    logger.detailed('Markdown preprocessing results:', {
+        context: {
+            originalLength: originalMarkdown.length,
+            processedLength: processedMarkdown.length,
+            // Extract and log all wiki-links from original
+            originalWikiLinks: [...originalMarkdown.matchAll(/\[\[([^\]]+)\]\]/g)].map(m => m[1]),
+            // Extract and log all converted links
+            processedLinks: [...processedMarkdown.matchAll(/\[([^\]]+)\]\(\/page\/[^)]+\)/g)].map(m => m[0])
+        }
+    });
+}
+
+// New helper function to handle all wiki-link processing
+function processWikiLinks(content) {
+    // Handle wiki-links with display text first
+    content = content.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, (match, link, display) => {
+        try {
+            const processedLink = processWikiLink(link);
+            logger.detailed('Processing wiki-link with display text', {
+                original: match,
+                link,
+                display,
+                processed: processedLink
+            });
+            return `[${display}](/page/${processedLink})`;
+        } catch (error) {
+            logger.warn('Failed to process wiki-link with display text', {
+                error,
+                match
+            });
+            return match;
+        }
+    });
+    
+    // Handle regular wiki-links
+    content = content.replace(/\[\[((?:[^\]]|\][^\]])*)\]\]/g, (match, inner) => {
+        if (!inner.trim()) return match;
+        
+        try {
+            const processedLink = processWikiLink(inner);
+            logger.detailed('Processing regular wiki-link', {
+                original: match,
+                inner,
+                processed: processedLink
+            });
+            return `[${inner}](/page/${processedLink})`;
+        } catch (error) {
+            logger.warn('Failed to process regular wiki-link', {
+                error,
+                match
+            });
+            return match;
+        }
+    });
+
+    return content;
+}
+
+function convertTableToNotionFormat(tableStr) {
+    const lines = tableStr.trim().split('\n');
+    if (lines.length < 2) return tableStr; // Not a valid table
+
+    // Parse header row
+    const headerCells = splitTableCells(lines[0]);
+    const columnCount = headerCells.length;
+
+    // Create Notion table format
+    const notionTable = {
+        type: 'table',
+        table: {
+            table_width: columnCount,
+            has_column_header: true,
+            children: []
+        }
+    };
+
+    // Process each row
+    lines.forEach((line, index) => {
+        if (index === 1 && line.includes('---')) return; // Skip separator row
+        
+        const cells = splitTableCells(line);
+        const rowContent = cells.map(cell => {
+            // Process wiki-links in cell
+            let processedCell = cell.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, (_, link, display) => {
+                const processedLink = processWikiLink(link);
+                return `[${display}](/page/${processedLink})`;
+            });
+            
+            processedCell = processedCell.replace(/\[\[([^\]]+)\]\]/g, (_, inner) => {
+                const processedLink = processWikiLink(inner);
+                return `[${inner}](/page/${processedLink})`;
+            });
+
+            // Handle line breaks
+            return processedCell.replace(/<br>/g, '\n');
+        });
+
+        // Pad cells if needed
+        while (rowContent.length < columnCount) {
+            rowContent.push('');
+        }
+
+        notionTable.table.children.push({
+            type: 'table_row',
+            cells: rowContent.map(content => ({
+                type: 'text',
+                text: { content }
+            }))
+        });
+    });
+
+    return JSON.stringify(notionTable);
 }
 
 module.exports = { 

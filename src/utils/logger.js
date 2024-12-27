@@ -1,5 +1,6 @@
 const winston = require('winston');
 const path = require('path');
+const fs = require('fs');
 
 // Custom log levels
 const levels = {
@@ -19,6 +20,25 @@ const colors = {
 
 // Add colors to winston
 winston.addColors(colors);
+
+// Create date-based directory and filenames
+function getLogPaths() {
+  const date = new Date();
+  const dateStr = date.toISOString().split('T')[0];
+  const timestamp = date.toISOString().replace(/[:.]/g, '-').split('Z')[0];
+  
+  const logDir = path.join(__dirname, '../../logs', dateStr);
+  if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir, { recursive: true });
+  }
+
+  return {
+    error: path.join(logDir, `error-${timestamp}Z.log`),
+    combined: path.join(logDir, `combined-${timestamp}Z.log`)
+  };
+}
+
+const logPaths = getLogPaths();
 
 // Create the logger
 const logger = winston.createLogger({
@@ -47,21 +67,14 @@ const logger = winston.createLogger({
     }),
     // File transport for errors
     new winston.transports.File({
-      filename: path.join(__dirname, '../../logs/error.log'),
+      filename: logPaths.error,
       level: 'error'
     }),
     // File transport for all logs
     new winston.transports.File({
-      filename: path.join(__dirname, '../../logs/combined.log')
+      filename: logPaths.combined
     })
   ]
 });
-
-// Create logs directory if it doesn't exist
-const fs = require('fs');
-const logsDir = path.join(__dirname, '../../logs');
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir, { recursive: true });
-}
 
 module.exports = logger; 
