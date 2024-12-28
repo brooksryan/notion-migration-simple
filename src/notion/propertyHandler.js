@@ -159,70 +159,58 @@ async function ensureProperties(databaseId, frontmatter) {
  * @param {string} type - The Notion property type
  * @returns {Object} Formatted property value for Notion
  */
-function formatPropertyValue(value, type) {
-  logger.detailed('Formatting property value', {
-    context: {
-      value,
-      type
+const formatPropertyValue = (value, type) => {
+    // Handle null/undefined values
+    if (value === null || value === undefined) {
+        switch (type) {
+            case 'title':
+                return { title: [] };
+            case 'rich_text':
+                return { rich_text: [] };
+            case 'multi_select':
+                return { multi_select: [] };
+            case 'date':
+                return { date: null };
+            default:
+                return { [type]: null };
+        }
     }
-  });
 
-  let formattedValue;
-  try {
+    // Convert value to string if it's not already
+    const stringValue = typeof value !== 'string' ? String(value) : value;
+
     switch (type) {
-      case 'title':
-        formattedValue = {
-          title: [{
-            text: {
-              content: value.toString()
-            }
-          }]
-        };
-        break;
-      case 'date':
-        formattedValue = {
-          date: {
-            start: value
-          }
-        };
-        break;
-      case 'multi_select':
-        const selections = Array.isArray(value) ? value : [value];
-        formattedValue = {
-          multi_select: selections.map(item => ({ name: item.toString() }))
-        };
-        break;
-      case 'rich_text':
-        formattedValue = {
-          rich_text: [{
-            text: {
-              content: value.toString()
-            }
-          }]
-        };
-        break;
-      default:
-        formattedValue = {
-          [type]: value
-        };
+        case 'title':
+            return {
+                title: [{
+                    type: 'text',
+                    text: { content: stringValue }
+                }]
+            };
+        case 'rich_text':
+            // Always return a rich_text array, even for empty strings
+            return {
+                rich_text: [{
+                    type: 'text',
+                    text: { content: stringValue }
+                }]
+            };
+        case 'multi_select':
+            // Handle array or comma-separated string
+            const tags = Array.isArray(value) 
+                ? value.map(v => v?.toString().trim()).filter(Boolean)  // Handle null/undefined in arrays
+                : stringValue.split(',').map(tag => tag.trim()).filter(Boolean);
+            return {
+                multi_select: tags.map(tag => ({ name: tag }))
+            };
+        case 'date':
+            // Return null for empty date strings
+            return { date: stringValue.trim() || null };
+        default:
+            // For unknown types, convert empty strings to null
+            return { [type]: stringValue.trim() || null };
     }
-
-    logger.detailed('Formatted property value', {
-      context: { formattedValue }
-    });
-
-    return formattedValue;
-  } catch (error) {
-    logger.error('Failed to format property value', {
-      error,
-      context: {
-        originalValue: value,
-        type
-      }
-    });
-    throw error;
-  }
-}
+};
 
 module.exports = {
   ensureProperties,
