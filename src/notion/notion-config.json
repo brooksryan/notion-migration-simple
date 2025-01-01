@@ -1,12 +1,15 @@
 {
   "databases": {
-    "default": "NOTION_DATABASE_ID",
+    "unsorted notes": "NOTION_UNSORTED_NOTES_ID",
+    "thoughts": "NOTION_THOUGHTS_DB",
     "important": "NOTION_IMPORTANT_NOTES_DB",
     "daily": "NOTION_DAILY_NOTES_DB",
     "project": "NOTION_PROJECT_NOTES_DB",
-    "coding": "NOTION_CODING_NOTES_DB",
-    "test": "NOTION_TEST_DB",
-    "professional notes": "NOTION_PROFESSIONAL_NOTES_DB"
+    "professional notes": "NOTION_PROFESSIONAL_NOTES_DB",
+    "billion_too_one_notes": "NOTION_BILLIONTOONENOTES_DB",
+    "learning": "NOTION_LEARNING_DB",
+    "golf": "NOTION_GOLF_DB",
+    "test": "NOTION_TEST_DB"
   },
   "propertyTypes": {
     "date": "date",

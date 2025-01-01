@@ -35,6 +35,7 @@ function processWikiLink(link, isDisplayText = false) {
     // Remove any unsafe characters and format for Notion
     const processed = link
         .trim()
+        .toLowerCase()
         // Replace special characters except those needed for paths
         .replace(/[^\w\s-./]/g, '')
         // Replace spaces with hyphens
@@ -513,7 +514,7 @@ function processWikiLinks(content) {
                 display,
                 processed: processedLink
             });
-            return `[${display}](/page/${processedLink})`;
+            return `[${display}](${processedLink})`;
         } catch (error) {
             logger.warn('Failed to process wiki-link with display text', {
                 error,
@@ -534,7 +535,7 @@ function processWikiLinks(content) {
                 inner,
                 processed: processedLink
             });
-            return `[${inner}](/page/${processedLink})`;
+            return `[${inner}](${processedLink})`;
         } catch (error) {
             logger.warn('Failed to process regular wiki-link', {
                 error,

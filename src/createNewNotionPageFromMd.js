@@ -239,7 +239,9 @@ async function createNotionPageFromMd(markdownFilePath, databaseType = 'default'
         const endFrontmatter = startTiming(operationContext, 'frontmatter_parsing');
         operationContext.step = 'frontmatter_parsing';
         logger.basic('Parsing frontmatter');
+        console.log('Before calling parseFrontmatter');
         const { frontmatter, body } = parseFrontmatter(markdownContent, markdownFilePath);
+        console.log('After calling parseFrontmatter', { frontmatter, body });
         logger.detailed('Parsed frontmatter:', { 
             context: sanitizeFrontmatter(frontmatter)
         });
@@ -249,7 +251,9 @@ async function createNotionPageFromMd(markdownFilePath, databaseType = 'default'
         const endWikiLinks = startTiming(operationContext, 'wiki_link_processing');
         operationContext.step = 'wiki_link_processing';
         logger.basic('Processing wiki links');
+        console.log('Before calling parseMarkdownBody');
         const { wikiLinks, modifiedBody } = parseMarkdownBody(body);
+        console.log('After calling parseMarkdownBody', { wikiLinks, modifiedBody });
         logger.detailed('Processed wiki links:', {
             context: {
                 wikiLinksCount: wikiLinks.length,
@@ -262,7 +266,9 @@ async function createNotionPageFromMd(markdownFilePath, databaseType = 'default'
         const endConversion = startTiming(operationContext, 'markdown_conversion');
         operationContext.step = 'markdown_conversion';
         logger.basic('Converting markdown to Notion blocks');
+        console.log('Before calling convertToNotionBlocksWithMartian');
         const notionBlocks = convertToNotionBlocksWithMartian(modifiedBody);
+        console.log('After calling convertToNotionBlocksWithMartian', { notionBlocks });
         operationContext.blockCount = notionBlocks.length;
         
         const blockSummary = countBlockTypes(notionBlocks);
@@ -277,12 +283,14 @@ async function createNotionPageFromMd(markdownFilePath, databaseType = 'default'
         const endPageCreation = startTiming(operationContext, 'notion_page_creation');
         operationContext.step = 'notion_page_creation';
         logger.basic('Creating page in Notion');
+        console.log('Before calling createPage', { frontmatter });
         const response = await createPage({
             properties: frontmatter,
             notionBlocks,
             wikiLinks,
             databaseType
         });
+        console.log('After calling createPage', { response });
 
         const duration = endPageCreation();
         logger.basic('Successfully created Notion page');
@@ -298,6 +306,7 @@ async function createNotionPageFromMd(markdownFilePath, databaseType = 'default'
 
         return response;
     } catch (error) {
+        console.error('Error in createNotionPageFromMd', error);
         const errorCategory = categorizeError(error);
         const errorContext = {
             ...operationContext,

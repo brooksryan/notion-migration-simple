@@ -9,7 +9,7 @@
  * @returns {{ wikiLinks: string[], modifiedBody: string }}
  */
 function parseMarkdownBody(body) {
-    const wikiLinkRegex = /\[\[([^\]]+)\]\]/g;
+    const wikiLinkRegex = /\[\[([^\]]+)\]\]/g; // [[...]]
     const wikiLinks = [];
     let match;
   
