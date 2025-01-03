@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { convertToNotionBlocks, convertToNotionBlocksWithMartian } = require('../markdownToNotionBlocks');
+const { logger } = require('../../utils/logger');
 
 describe('markdownToNotionBlocks - Image and Wiki Link Handling', () => {
   let testMarkdown;

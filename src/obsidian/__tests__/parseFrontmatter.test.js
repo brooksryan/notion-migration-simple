@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const parseFrontmatter = require('../parseFrontmatter'); // relative path to the code file
+const { logger } = require('../../utils/logger');
 
 describe('parseFrontmatter', () => {
   const fixturesDir = path.join(__dirname, 'fixtures');

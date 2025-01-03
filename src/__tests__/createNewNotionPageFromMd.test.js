@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const createNotionPageFromMd = require('../createNewNotionPageFromMd');
 const { getDatabaseId } = require('../notion/config');
+const { logger } = require('../utils/logger');
 
 describe('End-to-End Integration Test', () => {
   const TEST_DB_ID = '15b0224663ac80ef86cac42dd2fd7eee';

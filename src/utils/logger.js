@@ -1,6 +1,7 @@
 const winston = require('winston');
 const path = require('path');
 const fs = require('fs');
+const LOG_LEVEL = process.env.LOG_LEVEL || 'basic';
 
 // Custom log levels
 const levels = {

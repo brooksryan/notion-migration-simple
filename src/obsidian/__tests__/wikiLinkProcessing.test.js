@@ -1,4 +1,5 @@
 const { preprocessMarkdown } = require('../markdownToNotionBlocks');
+const { logger } = require('../../utils/logger');
 
 describe('Wiki-link Processing', () => {
     describe('basic wiki-links', () => {
